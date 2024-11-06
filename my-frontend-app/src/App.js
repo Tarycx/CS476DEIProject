@@ -8,9 +8,9 @@ import './App.css';
 const App = () => {
   const [account, setAccount] = useState('');
   const [contract, setContract] = useState(null);
-  const [totalFunds, setTotalFunds] = useState('0');
-  const [expenseCounter, setExpenseCounter] = useState(0);
-  const [minApprovalPercentage, setMinApprovalPercentage] = useState(0);
+  const [totalFunds, setTotalFunds] = useState('0'); // Default to "0" as a string
+  const [expenseCounter, setExpenseCounter] = useState('0'); // Start with "0" as a string
+  const [minApprovalPercentage, setMinApprovalPercentage] = useState(null);
 
   const [depositAmount, setDepositAmount] = useState('');
   const [expenseDescription, setExpenseDescription] = useState('');
@@ -18,9 +18,12 @@ const App = () => {
   const [expenseCategory, setExpenseCategory] = useState('');
   const [expenseId, setExpenseId] = useState('');
 
+  // New state for fetched expense details
+  const [fetchedExpense, setFetchedExpense] = useState(null);
+
 
    // Memoize the ABI to ensure it's not redefined on every render
-  const contractABI = useMemo(() => [
+  const contractABI = useMemo(() =>  [
     {
       "inputs": [
         {
@@ -481,6 +484,7 @@ const App = () => {
       "type": "function"
     }
   ], []); // Empty array ensures this is computed once and never recomputed
+  
   const contractAddress = '0x5FbDB2315678afecb367f032d93F642f64180aa3';  // Replace with your deployed contract address
 
   // Memoize loadBlockchainData to avoid unnecessary re-renders
@@ -489,16 +493,25 @@ const App = () => {
     if (web3) {
       try {
         const contractInstance = new web3.eth.Contract(contractABI, contractAddress);
+        console.log("Web3 initialized:", web3);
+        console.log("Contract Instance:", contractInstance);
         setContract(contractInstance);
 
         const totalFundsInWei = await contractInstance.methods.totalFunds().call();
+        console.log("Total Funds in Wei:", totalFundsInWei);
         setTotalFunds(web3.utils.fromWei(totalFundsInWei, 'ether'));
 
+        // Convert expenseCounter from BigInt to string
         const expenseCounterValue = await contractInstance.methods.expenseCounter().call();
-        setExpenseCounter(expenseCounterValue);
+        console.log("Fetched Expense Counter:", expenseCounterValue.toString()); // Convert to string for display
+        setExpenseCounter(expenseCounterValue.toString());
+        
 
-        const minApprovalValue = await contractInstance.methods.minApprovalPercentage().call();
-        setMinApprovalPercentage(minApprovalValue);
+      // Fetch minApprovalPercentage and convert BigInt to string
+      const minApprovalValue = await contractInstance.methods.minApprovalPercentage().call();
+      console.log("Fetched minApprovalPercentage:", minApprovalValue.toString()); // Convert to string
+      setMinApprovalPercentage(minApprovalValue.toString()); // Set as string to remove BigInt `n` suffix
+
       } catch (error) {
         console.error("Error loading contract data:", error);
       }
@@ -530,27 +543,80 @@ const App = () => {
     loadWeb3();
   }, [loadWeb3]);
 
+   // Listen for the ExpenseSubmitted event to update the expense counter
+   useEffect(() => {
+    if (contract) {
+
+      const updateTotalFunds = async () => {
+        const totalFundsInWei = await contract.methods.totalFunds().call();
+        setTotalFunds(window.web3.utils.fromWei(totalFundsInWei, 'ether'));
+      };
+
+      const updateExpenseCounter = async () => {
+        const updatedExpenseCounter = await contract.methods.expenseCounter().call();
+        console.log("Updated Expense Counter on Event:", updatedExpenseCounter.toString());
+        setExpenseCounter(updatedExpenseCounter.toString()); // Convert to string for UI
+      };
+
+      // Listen for the FundsDeposited event to update Total Funds
+      contract.events.FundsDeposited({}, (error, event) => {
+        if (!error) {
+          console.log("FundsDeposited event detected:", event);
+          updateTotalFunds();
+        } else {
+          console.error("Error with FundsDeposited event listener:", error);
+        }
+      });
+
+      contract.events.ExpenseSubmitted({}, (error, event) => {
+        if (!error) {
+          console.log("ExpenseSubmitted event detected:", event);
+          updateExpenseCounter();
+        } else {
+          console.error("Error with ExpenseSubmitted event listener:", error);
+        }
+      });
+    }
+  }, [contract]);
+
   // Deposit funds to the contract
   const depositFunds = async () => {
     if (contract && depositAmount) {
       const web3 = window.web3;
-      await contract.methods.depositFunds().send({
-        from: account,
-        value: web3.utils.toWei(depositAmount, 'ether')
-      });
-      alert('Funds deposited successfully');
+      try {
+        await contract.methods.depositFunds().send({
+          from: account,
+          value: web3.utils.toWei(depositAmount, 'ether'),
+        });
+        alert('Funds deposited successfully');
+  
+        // Immediately update Total Funds after deposit
+        const totalFundsInWei = await contract.methods.totalFunds().call();
+        setTotalFunds(web3.utils.fromWei(totalFundsInWei, 'ether'));
+      } catch (error) {
+        console.error("Error depositing funds:", error);
+      }
     }
   };
 
   // Submit a new expense to the contract
   const submitExpense = async () => {
     if (contract && expenseDescription && expenseAmount && expenseCategory) {
-      await contract.methods
-        .submitExpense(expenseDescription, expenseAmount, expenseCategory)
-        .send({ from: account });
-      alert('Expense submitted successfully');
+      try {
+        await contract.methods
+          .submitExpense(expenseDescription, expenseAmount, expenseCategory)
+          .send({ from: account });
+        alert('Expense submitted successfully');
+
+        // Re-fetch the updated expense counter
+        const updatedExpenseCounter = await contract.methods.expenseCounter().call();
+        setExpenseCounter(updatedExpenseCounter);
+      } catch (error) {
+        console.error("Error submitting expense:", error);
+      }
     }
   };
+
 
   // Approve an expense
   const approveExpense = async () => {
@@ -560,13 +626,36 @@ const App = () => {
     }
   };
 
+ 
+  // New function to fetch expense details based on the expenseCounter
+  const fetchExpenseDetails = async () => {
+    if (contract && expenseId) {
+      try {
+        const expenseDetails = await contract.methods.getExpenseDetails(expenseId).call();
+        setFetchedExpense({
+          id: Number(expenseDetails[0]), // Convert to Number
+          submitter: expenseDetails[1],
+          description: expenseDetails[2],
+          amount: Web3.utils.fromWei(expenseDetails[3].toString(), 'ether'), // Convert from Wei to ETH, ensuring toString for BigInt
+          category: expenseDetails[4],
+          approved: expenseDetails[5],
+          approvalCount: Number(expenseDetails[6]), // Convert to Number
+          timestamp: new Date(Number(expenseDetails[7]) * 1000).toLocaleString() // Convert BigInt to Number and then to readable date
+        });
+      } catch (error) {
+        console.error("Error fetching expense details:", error);
+      }
+    }
+  };
+  
+
   return (
     <div className="container">
       <h1>Decentralized Expense Index (DEI) Group Budgeting</h1>
       <p>Connected Account: {account}</p>
       <p>Total Funds: {totalFunds} ETH</p>
-      <p>Expense Counter: {expenseCounter}</p>
-      <p>Minimum Approval Percentage: {minApprovalPercentage}%</p>
+      <p>Expense Counter: {expenseCounter !== "0" ? expenseCounter.toString() : "0"}</p>
+      <p>Minimum Approval Percentage: {minApprovalPercentage !== null ? `${minApprovalPercentage}%` : "Loading..."}</p>
 
       <div className="section">
         <h2>Deposit Funds</h2>
@@ -611,6 +700,30 @@ const App = () => {
           onChange={(e) => setExpenseId(e.target.value)}
         />
         <button onClick={approveExpense}>Approve Expense</button>
+      </div>
+
+      <div className="section">
+        <h2>Fetch Expense Details</h2>
+        <input
+          type="text"
+          placeholder="Expense ID"
+          value={expenseId}
+          onChange={(e) => setExpenseId(e.target.value)}
+        />
+        <button onClick={fetchExpenseDetails}>Fetch Details</button>
+        {fetchedExpense && (
+          <div>
+            <h3>Expense Details:</h3>
+            <p>ID: {fetchedExpense.id}</p>
+            <p>Submitter: {fetchedExpense.submitter}</p>
+            <p>Description: {fetchedExpense.description}</p>
+            <p>Amount: {fetchedExpense.amount} ETH</p>
+            <p>Category: {fetchedExpense.category}</p>
+            <p>Approved: {fetchedExpense.approved ? "Yes" : "No"}</p>
+            <p>Approval Count: {fetchedExpense.approvalCount}</p>
+            <p>Timestamp: {fetchedExpense.timestamp}</p>
+          </div>
+        )}
       </div>
     </div>
   );

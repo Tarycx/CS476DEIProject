@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 
 contract DecentralizedExpenseIndexGroup {
 
-    //Structure to store details of each expense
+    // Structure to store details of each expense
     struct Expense {
         uint id;
         address submitter;
@@ -19,13 +19,13 @@ contract DecentralizedExpenseIndexGroup {
     uint public expenseCounter;
     uint public totalFunds;
     
-    mapping(address => bool) public groupMembers; // Track group members
-    mapping(address => uint) public contributions; // Track each member's contribution
-    mapping(uint => Expense) public expenses; // Map expense IDs to expenses
-    mapping(uint => mapping(address => bool)) public approvals; // Map expense ID to approvers
+    mapping(address => bool) public groupMembers; //Track group members
+    mapping(address => uint) public contributions; //Track each member's contribution
+    mapping(uint => Expense) public expenses; //Map expense IDs to expenses
+    mapping(uint => mapping(address => bool)) public approvals; //Map expense ID to approvers
 
     uint public groupSize;
-    uint public minApprovalPercentage; // Minimum percentage of approvals required
+    uint public minApprovalPercentage; //Minimum percentage of approvals required
 
     // Events
     event ExpenseSubmitted(uint id, address indexed submitter, string description, uint amount, string category, uint timestamp);
@@ -74,7 +74,7 @@ contract DecentralizedExpenseIndexGroup {
     function submitExpense(string memory _description, uint _amount, string memory _category) public onlyGroupMember {
         require(_amount <= totalFunds, "Not enough funds in the budget");
 
-        expenseCounter++;  // Increment expense counter
+        expenseCounter++;  //Increment expense counter
         expenses[expenseCounter] = Expense({
             id: expenseCounter,
             submitter: msg.sender,

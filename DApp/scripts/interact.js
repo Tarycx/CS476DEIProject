@@ -1,7 +1,7 @@
 const { ethers } = require("hardhat");
 
 
-// FIXME: ParsesEther Errors
+// FIXME: ParsesEther, ParseUnits Errors
 
 async function main() {
     // Replace with your deployed contract address
