@@ -18,12 +18,16 @@ const App = () => {
   const [expenseCategory, setExpenseCategory] = useState('');
   const [expenseId, setExpenseId] = useState('');
 
-  // New state for fetched expense details
-  const [fetchedExpense, setFetchedExpense] = useState(null);
+  //Week 7 -8 updates
+  const [totalExpenses, setTotalExpenses] = useState(null);
+  const [fetchedExpense, setFetchedExpense] = useState(null);// New state for fetched expense details
+  const [totalUnapprovedExpenses, setTotalUnapprovedExpenses] = useState(null);
+  const [groupMembers, setGroupMembers] = useState(null);
+
 
 
    // Memoize the ABI to ensure it's not redefined on every render
-  const contractABI = useMemo(() =>  [
+  const contractABI = useMemo(() =>   [
     {
       "inputs": [
         {
@@ -366,6 +370,19 @@ const App = () => {
       "type": "function"
     },
     {
+      "inputs": [],
+      "name": "getGroupSize",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
       "inputs": [
         {
           "internalType": "address",
@@ -521,22 +538,33 @@ const App = () => {
   }, [contractABI, contractAddress]);
 
   // Memoize loadWeb3 to avoid unnecessary re-renders
-  const loadWeb3 = useCallback(async () => {
-    if (window.ethereum) {
-      try {
-        const web3 = new Web3(window.ethereum);
-        await window.ethereum.request({ method: 'eth_requestAccounts' });
-        const accounts = await web3.eth.getAccounts();
-        setAccount(accounts[0]);
-        window.web3 = web3;
-        loadBlockchainData();  // Call loadBlockchainData after initializing web3
-      } catch (error) {
-        console.error("Error connecting to MetaMask:", error);
-      }
-    } else {
-      alert('Please install MetaMask to use this DApp.');
+ 
+const loadWeb3 = useCallback(async () => {
+  if (window.ethereum) {
+    try {
+      const web3 = new Web3(window.ethereum);
+      await window.ethereum.request({ method: 'eth_requestAccounts' });
+      const accounts = await web3.eth.getAccounts();
+      setAccount(accounts[0]);
+      window.web3 = web3;
+      loadBlockchainData(); // Call loadBlockchainData after initializing web3
+
+      // Listen for account changes
+      window.ethereum.on('accountsChanged', (accounts) => {
+        if (accounts.length > 0) {
+          setAccount(accounts[0]);
+          loadBlockchainData(); // Reload blockchain data for the new account
+        } else {
+          alert('Please connect to MetaMask.');
+        }
+      });
+    } catch (error) {
+      console.error("Error connecting to MetaMask:", error);
     }
-  }, [loadBlockchainData]);
+  } else {
+    alert('Please install MetaMask to use this DApp.');
+  }
+}, [loadBlockchainData]);
 
   // Load web3 and contract data on component mount
   useEffect(() => {
@@ -603,28 +631,57 @@ const App = () => {
   const submitExpense = async () => {
     if (contract && expenseDescription && expenseAmount && expenseCategory) {
       try {
+        // Convert µETH to wei (1 µETH = 10^12 wei)
+        const amountInWei = Web3.utils.toWei((expenseAmount / 1e6).toString(), 'ether');
+  
+        // Submit the expense
         await contract.methods
-          .submitExpense(expenseDescription, expenseAmount, expenseCategory)
+          .submitExpense(expenseDescription, amountInWei, expenseCategory)
           .send({ from: account });
+  
         alert('Expense submitted successfully');
-
+  
         // Re-fetch the updated expense counter
         const updatedExpenseCounter = await contract.methods.expenseCounter().call();
         setExpenseCounter(updatedExpenseCounter);
       } catch (error) {
         console.error("Error submitting expense:", error);
       }
+    } else {
+      alert("Please fill in all fields before submitting an expense.");
     }
   };
+  
+  
+  
 
 
   // Approve an expense
-  const approveExpense = async () => {
-    if (contract && expenseId) {
+const approveExpense = async () => {
+  if (contract && expenseId) {
+    try {
+      // Approve the expense
       await contract.methods.approveExpense(expenseId).send({ from: account });
-      alert('Expense approved successfully');
+
+      // Fetch the updated expense details
+      const expenseDetails = await contract.methods.getExpenseDetails(expenseId).call();
+
+      // Check if the expense is approved
+      if (expenseDetails[5]) {
+        // expenseDetails[5] corresponds to the "approved" field
+        alert('Expense approved successfully');
+      } else {
+        alert('Expense approval pending (more approvals required)');
+      }
+    } catch (error) {
+      console.error("Error approving expense:", error);
     }
-  };
+  } else {
+    alert("Please provide a valid Expense ID.");
+  }
+  fetchTotalExpenses();//Update Expense counters
+  fetchExpenseDetails();
+};
 
  
   // New function to fetch expense details based on the expenseCounter
@@ -647,6 +704,64 @@ const App = () => {
       }
     }
   };
+
+
+  //Week 7 - 8 Updates
+  //fetch all expenses and calculate the total of approved expenses.
+  const fetchTotalExpenses = useCallback(async () => {
+    if (contract) {
+      try {
+        const expenseCount = await contract.methods.expenseCounter().call();
+        let approvedTotal = 0;
+        let unapprovedTotal = 0;
+  
+        for (let i = 0; i <= expenseCount; i++) {
+          const expenseDetails = await contract.methods.getExpenseDetails(i).call();
+          const isApproved = expenseDetails[5]; // Approved status
+          const amount = expenseDetails[3]; // Amount in Wei
+  
+          if (isApproved) {
+            approvedTotal += parseFloat(Web3.utils.fromWei(amount.toString(), 'ether')); // Convert from Wei to ETH
+          } else {
+            unapprovedTotal += parseFloat(Web3.utils.fromWei(amount.toString(), 'ether')); // Convert from Wei to ETH
+          }
+        }
+  
+        setTotalExpenses(approvedTotal); // Approved expenses total
+        setTotalUnapprovedExpenses(unapprovedTotal); // Unapproved expenses total
+      } catch (error) {
+        console.error("Error calculating total expenses:", error);
+      }
+    }
+  }, [contract]);
+
+  useEffect(() => {
+    fetchTotalExpenses();
+  }, [fetchTotalExpenses, expenseCounter]); // Recalculate when expenseCounter changes
+  
+
+  //Fetchs Group size from contract
+  const fetchGroupSize = useCallback(async () => {
+    if (contract) {
+      try {
+        const groupSize = await contract.methods.getGroupSize().call();
+        console.log("Group Size Fetched:", groupSize); // Debugging
+  
+        // Convert BigInt to standard number or string
+        setGroupMembers(Number(groupSize)); // Converts to a regular JavaScript number
+      } catch (error) {
+        console.error("Error fetching group size:", error);
+      }
+    } else {
+      console.warn("Contract is not initialized.");
+    }
+  }, [contract]);
+  
+  useEffect(() => {
+    fetchGroupSize();
+  }, [fetchGroupSize]);
+
+
   
 
   return (
@@ -654,8 +769,11 @@ const App = () => {
       <h1>Decentralized Expense Index (DEI) Group Budgeting</h1>
       <p>Connected Account: {account}</p>
       <p>Total Funds: {totalFunds} ETH</p>
+      <p>Total Expenses (Approved): {totalExpenses} ETH</p>
+      <p>Total Expenses (Unapproved): {totalUnapprovedExpenses} ETH</p>
       <p>Expense Counter: {expenseCounter !== "0" ? expenseCounter.toString() : "0"}</p>
       <p>Minimum Approval Percentage: {minApprovalPercentage !== null ? `${minApprovalPercentage}%` : "Loading..."}</p>
+      <p>Group Members: {groupMembers !== null ? groupMembers : "Loading..."}</p>
 
       <div className="section">
         <h2>Deposit Funds</h2>
@@ -678,7 +796,7 @@ const App = () => {
         />
         <input
           type="text"
-          placeholder="Amount in Wei"
+          placeholder="Amount in µETH (1 ETH = 1,000,000 Microether)"
           value={expenseAmount}
           onChange={(e) => setExpenseAmount(e.target.value)}
         />
@@ -725,6 +843,7 @@ const App = () => {
           </div>
         )}
       </div>
+
     </div>
   );
 };

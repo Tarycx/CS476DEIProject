@@ -16,10 +16,11 @@ async function main() {
     // We get the contract to deploy
     const DEIGroup = await ethers.getContractFactory("DecentralizedExpenseIndexGroup");
   
-    // Deploy the contract, passing in any required constructor arguments. Group members (Accounts 1 & 2)
+    // Deploy the contract, passing in any required constructor arguments. Group members (Accounts 1 & 2) Account 3 for testing multiple accounts
     const deiGroup = await DEIGroup.deploy(
       ["0x70997970C51812dc3A010C7d01b50e0d17dc79C8", "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC"], // Replace these with actual Ethereum addresses
       50 // Minimum approval percentage (all members must vote to approve)
+      //Account #1: 0x7099, Account #2 0x3C44, Account #3 0x90F79bf6EB2c4f870365E785982E1f101E93b906 (Account 3 for testing larger groups)
     );
   
   

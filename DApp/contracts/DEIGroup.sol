@@ -61,6 +61,11 @@ contract DecentralizedExpenseIndexGroup {
         groupSize = _members.length;
     }
 
+    //Getter for group size Update Week 7 - 8
+    function getGroupSize() public view returns (uint) {
+        return groupSize;
+    }
+
     // Function to deposit funds into the group budget
     function depositFunds() public payable onlyGroupMember {
         require(msg.value > 0, "Must deposit a positive amount");
@@ -102,7 +107,7 @@ contract DecentralizedExpenseIndexGroup {
         emit ExpenseApproved(_expenseId, msg.sender);
 
         // Check if the expense has enough approvals
-        uint requiredApprovals = (minApprovalPercentage * groupSize) / 100;
+        uint requiredApprovals = ((minApprovalPercentage * groupSize) + 99) / 100; // Updated to round up (x + 99) (Problems since update)
         if (expense.approvalCount >= requiredApprovals) {
             expense.approved = true;
         }
