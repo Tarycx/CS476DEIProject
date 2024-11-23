@@ -2,24 +2,38 @@
 
 
 body {
+
+  display: flex;
+  justify-content: center; /* Horizontal centering */
+  align-items: center; /* Vertical centering */
   font-family: Arial, sans-serif;
-  background-color: #f4f4f4;
-  color: #333;
+  background-color: #ffffff;
+  background-image: url('DAppFrontEndImage.jpg'); /* Reference to the image in the public folder */
+  background-size: cover; /* Ensures the image covers the entire container */
+  background-position: center; /* Centers the image */
+  background-repeat: no-repeat; /* Prevents the image from repeating */
+  height: 100%; /* Adjusts container height to full viewport height */
+  width: 100%; /* Makes container width 100% */
+  color: #0d0a0a;
   margin: 0;
   padding: 0;
   text-align: center;
 }
 
 .container {
+  
+  width: 80%; /* Adjust width as needed */
+  height: auto; /* Adjust height as needed */
+  
   max-width: 800px;
   margin: 0 auto;
   padding: 20px;
-  background-color: #fff;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  background-color: #ffffff;
+  box-shadow: 0 0 10px rgba(246, 244, 244, 0.1);
 }
 
 h1 {
-  color: #333;
+  color: #000000;
   margin-bottom: 20px;
 }
 
